@@ -1,0 +1,123 @@
+---
+title: "node_network_medium"
+author: "Jake"
+date: "06/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggraph)
+library(igraph)
+library(widyr)
+library(tidytext)
+library(ggrepel)
+library(extrafont)
+loadfonts(device = "pdf", quiet = TRUE)
+
+file_name <- "8-Days_of_politics_articles_starting_2019-12-08.csv"
+cleaned_data <- read_csv(file_name)
+
+unwanted_words <- c("min", "it", "don", "isn", "you", "i", "medium", "ve", "doesn")
+
+medium_words_filtered <- cleaned_data %>%
+  mutate(full_text = str_replace_all(full_text, "[:punct:]", " ")) %>%
+  transmute(post_id = row_number(), full_text, date, claps) %>%
+  unnest_tokens(word, full_text) %>%
+  anti_join(stop_words, by= "word") %>%
+  filter(!word %in% unwanted_words) %>%
+  filter(str_detect(word, "[a-z]")) %>%
+  filter(nchar(word) > 2) %>%
+  mutate(word = str_remove(word, "'")) %>%
+  add_count(word, name = "mentions") %>%  
+  filter(mentions >= 50) 
+```
+
+
+```{r}
+medium_words_filtered %>%
+  arrange(desc(mentions)) %>%
+  distinct(word, mentions) %>%
+  head(20) %>%
+  ggplot(aes(x=reorder(word, desc(mentions)), y=mentions)) +
+  geom_col(fill = "lightblue") +
+  geom_text(aes(label = word), size = 4, hjust = 1.5, angle = 90, colour = "white")
+```
+
+
+```{r}
+top_word_cors <- medium_words_filtered %>%
+  select(post_id, word) %>%
+  pairwise_cor(word, post_id, sort=T) %>%
+  mutate(correlation = as.numeric(correlation)) %>%
+  filter(correlation < 0.99 & correlation > 0.35) 
+```
+
+```{r, fig.height = 4, fig.width = 5, dev = "CairoPNG", dpi = 300}
+# visual of clusters
+set.seed(2019)
+
+top_word_cors %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(color = "pink") + 
+  geom_node_point(color = "lightblue", size = 4, alpha = 0.5) +
+  geom_node_text(aes(label = name), size = 2.5, repel = F, check_overlap = T) +
+  theme_void() +
+  labs(title = "Election 2020 - Evaluating Word Networks on Medium.com",
+       subtitle = str_glue("From {nrow(cleaned_data)} \"Politics\" articles between December 8th - 15th 2019")) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", family = "Roboto Condensed"),
+        plot.subtitle = element_text(hjust = 0.5, family = "Roboto Condensed"),
+        plot.caption = element_text(colour = "gray60", face = "italic"),
+        plot.margin = margin(t=10, r=20, b=10, l=10, unit = "pt")) 
+```
+
+```{r}
+# adding another dimension
+tag_claps <- medium_words_filtered %>%
+  filter(mentions >= 50) %>%
+  group_by(word) %>%
+  summarize(geometric_mean_claps = exp(mean(log(claps + 1))) - 1,
+            occurences = n())
+
+# best words to use right now
+(vertices <- tag_claps %>%
+    filter(word %in% top_word_cors$item1 | word %in% top_word_cors$item2) %>%
+    filter(!word %in% c("14scottish", "fold")) %>%
+    arrange(desc(geometric_mean_claps)))
+```
+
+```{r, fig.height = 4, fig.width = 4, dev = "CairoPNG", dpi = 300}
+set.seed(2018)
+# average claps earned
+top_word_cors %>%
+  filter(!item1 %in% c("14scottish", "fold")) %>%
+  filter(!item2 %in% c("14scottish", "fold")) %>%
+  graph_from_data_frame(vertices = vertices) %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(check_overlap = T, color = "pink") + 
+  geom_node_point(aes(size = occurences * 1.1)) +
+  geom_node_point(aes(size = occurences, color = geometric_mean_claps)) +
+  geom_node_text(aes(label = name), size = 2, repel = F, check_overlap = T) +
+  theme_void() +
+  labs(title = "Election 2020 — Evaluating Word Networks on Medium.com", 
+       subtitle = "Colour highlights which words are generating the most claps", 
+       color = "Geometric \nclaps", 
+       size = "Total \nMentions",
+       caption = "") +
+  scale_color_gradient2(low = "white", high = "tomato",
+                       midpoint = 5) +
+  theme(text = element_text(family = "Roboto Condensed"),
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.caption = element_text(size = 10, colour = "gray60", face = "italic"),
+        plot.margin = margin(t=10, r=20, b=10, l=10, unit = "pt"),
+        legend.position = "bottom",
+        legend.background = element_rect(fill="gray90", size = 0.25))
+```
+
+
