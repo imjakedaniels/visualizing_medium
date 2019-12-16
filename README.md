@@ -1,6 +1,6 @@
 # Visualizing political discourse every week
 
-I'm looking to create Node networks and LDA models to find topics inside Medium.com/topic/politics articles.
+I'm looking to create node networks and LDA models to visualize weekly topics from [Medium Politics](https://medium.com/topic/politics) articles.
 
 [![Example](weekly_politics_network/00003a.png)]()
 
