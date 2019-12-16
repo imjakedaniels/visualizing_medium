@@ -57,9 +57,9 @@ top_word_cors <- medium_words_filtered %>%
   filter(correlation < 0.99 & correlation > 0.35) 
 ```
 
-```{r, fig.height = 4, fig.width = 5, dev = "CairoPNG", dpi = 300}
+```{r, fig.height = 4, fig.width = 4, dev = "CairoPNG", dpi = 300}
 # visual of clusters
-set.seed(2019)
+set.seed(2018)
 
 top_word_cors %>%
   graph_from_data_frame() %>%
