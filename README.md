@@ -6,7 +6,7 @@ I'm looking to create node networks and LDA models to visualize weekly topics fr
 
 [![Example](weekly_politics_network/000054.png)]()
 
-I scrape a week's worth of Medium articles — ~1,000 articles, 400,000 words — the post these graphs to [r/uspolitics](https://www.reddit.com/r/uspolitics/)
+I scrape a week's worth of Medium articles — ~1,000 articles, 400,000 words — then post these graphs to [r/uspolitics](https://www.reddit.com/r/uspolitics/)
 
 # Packages
 For node networks:
