@@ -19,14 +19,20 @@ library(ggrepel)
 library(extrafont)
 loadfonts(device = "pdf", quiet = TRUE)
 
-file_name <- "8-Days_of_politics_articles_starting_2019-12-08.csv"
+tag <- "politics"
+file_name <- str_glue("7-Days_of_{tag}_articles_starting_2020-01-26.csv")
 cleaned_data <- read_csv(file_name)
 
 unwanted_words <- c("min", "it", "don", "isn", "you", "i", "medium", "ve", "doesn")
 
-medium_words_filtered <- cleaned_data %>%
+# must have 10 claps
+medium_articles <- cleaned_data %>%
   mutate(full_text = str_replace_all(full_text, "[:punct:]", " ")) %>%
   transmute(post_id = row_number(), full_text, date, claps) %>%
+  filter(claps >= 10)
+
+# must have 30 mentions
+medium_words_filtered <- medium_articles %>%
   unnest_tokens(word, full_text) %>%
   anti_join(stop_words, by= "word") %>%
   filter(!word %in% unwanted_words) %>%
@@ -34,7 +40,7 @@ medium_words_filtered <- cleaned_data %>%
   filter(nchar(word) > 2) %>%
   mutate(word = str_remove(word, "'")) %>%
   add_count(word, name = "mentions") %>%  
-  filter(mentions >= 50) 
+  filter(mentions >= 30) 
 ```
 
 
@@ -43,9 +49,11 @@ medium_words_filtered %>%
   arrange(desc(mentions)) %>%
   distinct(word, mentions) %>%
   head(20) %>%
-  ggplot(aes(x=reorder(word, desc(mentions)), y=mentions)) +
+  ggplot(aes(x=reorder(word, mentions), y=mentions)) +
   geom_col(fill = "lightblue") +
-  geom_text(aes(label = word), size = 4, hjust = 1.5, angle = 90, colour = "white")
+  expand_limits(y = max(medium_words_filtered$mentions) * 1.1) +
+  geom_text(aes(label = word), size = 4, hjust = 1.1, vjust = 0.4, colour = "white") +
+  coord_flip() 
 ```
 
 
@@ -57,9 +65,9 @@ top_word_cors <- medium_words_filtered %>%
   filter(correlation < 0.99 & correlation > 0.35) 
 ```
 
-```{r, fig.height = 4, fig.width = 4, dev = "CairoPNG", dpi = 300}
+```{r, fig.height = 4, fig.width = 6, dev = "CairoPNG", dpi = 300}
 # visual of clusters
-set.seed(2018)
+set.seed(10)
 
 top_word_cors %>%
   graph_from_data_frame() %>%
@@ -68,8 +76,8 @@ top_word_cors %>%
   geom_node_point(color = "lightblue", size = 4, alpha = 0.5) +
   geom_node_text(aes(label = name), size = 2.5, repel = F, check_overlap = T) +
   theme_void() +
-  labs(title = "Election 2020 - Evaluating Word Networks on Medium.com",
-       subtitle = str_glue("From {nrow(cleaned_data)} \"Politics\" articles between December 8th - 15th 2019")) +
+  labs(title = "Evaluating Word Networks on Medium.com",
+       subtitle = str_glue("From {nrow(medium_articles)} \"{tag}\" articles between {start} and {end}")) +
   theme(plot.title = element_text(hjust = 0.5, face = "bold", family = "Roboto Condensed"),
         plot.subtitle = element_text(hjust = 0.5, family = "Roboto Condensed"),
         plot.caption = element_text(colour = "gray60", face = "italic"),
@@ -79,7 +87,7 @@ top_word_cors %>%
 ```{r}
 # adding another dimension
 tag_claps <- medium_words_filtered %>%
-  filter(mentions >= 50) %>%
+  filter(mentions >= 30) %>%
   group_by(word) %>%
   summarize(geometric_mean_claps = exp(mean(log(claps + 1))) - 1,
             occurences = n())
@@ -91,8 +99,8 @@ tag_claps <- medium_words_filtered %>%
     arrange(desc(geometric_mean_claps)))
 ```
 
-```{r, fig.height = 4, fig.width = 4, dev = "CairoPNG", dpi = 300}
-set.seed(2018)
+```{r, fig.height = 3, fig.width = 4, dev = "CairoPNG", dpi = 300}
+set.seed(10)
 # average claps earned
 top_word_cors %>%
   filter(!item1 %in% c("14scottish", "fold")) %>%
@@ -101,23 +109,57 @@ top_word_cors %>%
   ggraph(layout = "fr") +
   geom_edge_link(check_overlap = T, color = "pink") + 
   geom_node_point(aes(size = occurences * 1.1)) +
-  geom_node_point(aes(size = occurences, color = geometric_mean_claps)) +
-  geom_node_text(aes(label = name), size = 2, repel = F, check_overlap = T) +
+  geom_node_point(aes(size = occurences), color = "white") +
+  geom_node_text(aes(label = name, size = geometric_mean_claps),  repel = F, check_overlap = T) +
   theme_void() +
-  labs(title = "Election 2020 — Evaluating Word Networks on Medium.com", 
-       subtitle = "Colour highlights which words are generating the most claps", 
-       color = "Geometric \nclaps", 
+  labs(title = str_glue("Politics — Evaluating Word Networks in Medium.com"), 
+       subtitle = "Word size based on geometric claps", 
+       #color = "Claps \n(geometric scale)", 
        size = "Total \nMentions",
        caption = "") +
-  scale_color_gradient2(low = "white", high = "tomato",
-                       midpoint = 5) +
+  scale_color_gradient2(low = "white", high = "red",
+                       midpoint = 3) +
   theme(text = element_text(family = "Roboto Condensed"),
         plot.title = element_text(hjust = 0.5, face = "bold"),
         plot.subtitle = element_text(hjust = 0.5),
         plot.caption = element_text(size = 10, colour = "gray60", face = "italic"),
         plot.margin = margin(t=10, r=20, b=10, l=10, unit = "pt"),
         legend.position = "bottom",
-        legend.background = element_rect(fill="gray90", size = 0.25))
+        legend.background = element_rect(fill="gray90", size = 0.25),
+        legend.text = element_text(hjust = 0.5))
+
+ggsave(filename = paste("trending_politics_network", start, end, ".png"))
 ```
 
+```{r, fig.height = 3, fig.width = 4, dev = "CairoPNG", dpi = 300}
+set.seed(2001)
+# average claps earned
+top_word_cors %>%
+  filter(!item1 %in% c("14scottish", "fold")) %>%
+  filter(!item2 %in% c("14scottish", "fold")) %>%
+  graph_from_data_frame(vertices = vertices) %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(check_overlap = T, color = "pink") + 
+  geom_node_point(aes(size = occurences * 1.1)) +
+  geom_node_point(aes(size = occurences, colour = geometric_mean_claps)) +
+  geom_node_text(aes(label = name, size = occurences),  repel = F, check_overlap = T) +
+  theme_void() +
+  labs(title = str_glue("Politics — Evaluating Word Networks in Medium.com"), 
+       subtitle = "Word size based volume\nColour intensity based on claps", 
+       color = "Claps Generated \n(geometric scale)", 
+       size = "Total \nMentions",
+       caption = "") +
+  scale_color_gradient2(low = "white", high = "red",
+                       midpoint = 3) +
+  theme(text = element_text(family = "Roboto Condensed"),
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.caption = element_text(size = 10, colour = "gray60", face = "italic"),
+        plot.margin = margin(t=10, r=20, b=10, l=10, unit = "pt"),
+        legend.position = "bottom",
+        legend.background = element_rect(fill="gray90", size = 0.25),
+        legend.text = element_text(hjust = 0.5))
+
+ggsave(filename = paste("volume_politics_network", start, end, ".png"))
+```
 
