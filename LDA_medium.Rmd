@@ -1,0 +1,149 @@
+---
+title: "LDA_medium"
+author: "Jake"
+date: "06/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      dev = "CairoPNG",
+                      dpi = 300)
+```
+
+```{r}
+library(tidyverse)
+library(topicmodels)
+library(tidytext)
+library(LDAvis)
+```
+
+```{r}
+cleaned_data <- read_csv("8-Days_of_politics_articles_starting_2019-12-08.csv")
+
+unwanted_words <- c("min", "it", "don", "isn", "you", "i", "medium", "ve", "doesn")
+```
+
+```{r}
+# must have 10 claps
+medium_articles <- cleaned_data %>%
+  mutate(full_text = str_replace_all(full_text, "[:punct:]", " ")) %>%
+  transmute(post_id = row_number(), full_text, date, claps) %>%
+  filter(claps >= 10)
+
+# must have 30 mentions
+medium_words_filtered <- medium_articles %>%
+  unnest_tokens(word, full_text) %>%
+  anti_join(stop_words, by= "word") %>%
+  filter(!word %in% unwanted_words) %>%
+  filter(str_detect(word, "[a-z]")) %>%
+  filter(nchar(word) > 2) %>%
+  mutate(word = str_remove(word, "'")) %>%
+  add_count(word, name = "mentions") %>%  
+  filter(mentions >= 30) 
+```
+
+
+```{r}
+post_word_matrix <- medium_words_filtered %>%
+  distinct(post_id, word, claps) %>%
+  cast_sparse(post_id, word)
+```
+
+NLP Cluster/LDA
+```{r}
+k <- 5 #number of topics
+seed = 1234 #necessary for reproducibility
+#fit the model passing the parameters discussed above
+#you could have more control parameters but will just use seed here
+lda <- LDA(post_word_matrix, k = k, method = "GIBBS", control = list(seed = 1234))
+#examine the class of the LDA object
+
+topics_tidy <- tidy(lda, matrix = "beta") %>% filter(term == "digital") # likeliest to be in topic 3
+
+theme_lyrics <- function(aticks = element_blank(),
+                         pgminor = element_blank(),
+                         lt = element_blank(),
+                         lp = "none")
+{
+  theme(plot.title = element_text(hjust = 0.5), #center the title
+        axis.ticks = aticks, #set axis ticks to on or off
+        panel.grid.minor = pgminor, #turn on or off the minor grid lines
+        legend.title = lt, #turn on or off the legend title
+        legend.position = lp) #turn on or off the legend
+}
+
+#create function that accepts the lda model and num word to display
+top_terms_per_topic <- function(lda_model, num_words) {
+
+  #tidy LDA object to get word, topic, and probability (beta)
+  topics_tidy <- tidy(lda_model, matrix = "beta")
+
+word_chart <- function(data, input, title) {
+  data %>%
+  #set y = 1 to just plot one variable and use word as the label
+  ggplot(aes(as.factor(row), 1, label = input, fill = factor(topic) )) +
+  #you want the words, not the points
+  geom_point(color = "transparent") +
+  #make sure the labels don't overlap
+  ggrepel::geom_label_repel(colour="white",
+                            nudge_x = .2,  
+                   direction = "y",
+                   box.padding = 0.2,
+                   segment.color = "transparent",
+                   size = 4) +
+  facet_grid(~topic) +
+  theme_lyrics() +
+  theme(axis.text.y = element_blank(), 
+    axis.text.x = element_blank(),
+        #axis.title.x = element_text(size = 9),
+        panel.grid = element_blank(), panel.background = element_blank(),
+        panel.border = element_rect("lightgray", fill = NA),
+        strip.text.x = element_text(size = 9)) +
+  labs(x = NULL, y = NULL, title = title) +
+    #xlab(NULL) + ylab(NULL) +
+  #ggtitle(title) +
+  coord_flip()
+}
+  
+
+top_terms <- topics_tidy %>%
+  group_by(topic) %>%
+  arrange(topic, desc(beta)) %>%
+  #get the top num_words PER topic
+  slice(seq_len(num_words)) %>%
+  arrange(topic, beta) %>%
+  #row is required for the word_chart() function
+  mutate(row = row_number()) %>%
+  ungroup() %>%
+  #add the word Topic to the topic labels
+  mutate(topic = paste("Topic", topic, sep = " "))
+  #create a title to pass to word_chart
+  title <- paste("LDA Top Terms for", k, "Topics")
+  #call the word_chart function you built in prep work
+  word_chart(top_terms, top_terms$term, title)
+} 
+
+#call the function you just built!
+top_terms_per_topic(lda, 8)
+```
+
+```{r}
+k <- 3 #number of topics chosen to match the number of genres
+num_words <- 10 #number of words we want to see in each topic
+seed = 1234 #make it repeatable
+#same as before
+lda <- LDA(post_word_matrix, k = k, method = "GIBBS", control = list(seed = seed))
+
+top_terms_per_topic(lda, num_words)
+```
+
+```{r}
+k <- 10 #number of topics chosen to match the number of genres
+num_words <- 5 #number of words we want to see in each topic
+seed = 1234 #make it repeatable
+#same as before
+lda <- LDA(post_word_matrix, k = k, method = "GIBBS", control = list(seed = seed))
+
+top_terms_per_topic(lda, num_words)
+```

@@ -162,4 +162,3 @@ top_word_cors %>%
 
 ggsave(filename = paste("volume_politics_network", start, end, ".png"))
 ```
-
