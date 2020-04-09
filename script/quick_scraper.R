@@ -8,9 +8,9 @@ library(xml2)
 ###### This is your input. ######
 ###### Fill this out first ######
 
-tag <- "election-2020"  # ex. "artificial-intelligence", "true-crime", "writing"
-start <- as.Date("2020-01-26") # YEAR-MO-DA ex. 2019-01-31
-end <- as.Date("2020-02-01")
+tag <- "politics"  # ex. "artificial-intelligence", "true-crime", "writing"
+start <- as.Date("2020-01-12") # YEAR-MO-DA ex. 2019-01-31
+end <- as.Date("2020-03-21")
 
 ###### This is the script ######
 
@@ -100,7 +100,8 @@ full_data_cleaned <- cleaned_data %>%
 
 full_data_cleaned_2 <- full_data_cleaned %>%
   filter(lengths(full_text) > 0) %>%
-  mutate(full_text = flatten_chr(full_text),
+  #mutate(full_text = flatten_chr(full_text),
+  mutate(full_text = as.character(full_text),
          full_text = str_replace_all(full_text, "[:punct:]", " ")) 
 
 
